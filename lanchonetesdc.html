@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cardápio Digital - Lanchonete SDC</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body class="bg-gray-100 font-sans pb-24">
+
+  <!-- Cabeçalho -->
+  <header class="bg-red-600 text-white p-4 shadow-md sticky top-0 z-10">
+    <div class="max-w-md mx-auto flex justify-between items-center">
+      <h1 class="text-xl font-bold tracking-wide">🍔 Lanchonete SDC</h1>
+      <button onclick="toggleCarrinho()" class="relative bg-red-700 px-3 py-2 rounded-full font-bold flex items-center gap-2">
+        <i class="fas font-solid fa-shopping-cart"></i>
+        <span id="cart-count" class="bg-yellow-400 text-red-900 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Categorias -->
+  <div class="max-w-md mx-auto p-4">
+    <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-none" id="category-bar">
+      <!-- Botões inseridos via JS -->
+    </div>
+
+    <!-- Lista de Produtos -->
+    <div id="products-list" class="grid gap-4 mt-4">
+      <!-- Produtos inseridos via JS -->
+    </div>
+  </div>
+
+  <!-- Modal do Carrinho -->
+  <div id="cart-modal" class="fixed inset-0 bg-black/60 hidden justify-center items-end sm:items-center z-50 p-0 sm:p-4">
+    <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] flex flex-col justify-between shadow-xl">
+      <div>
+        <div class="flex justify-between items-center border-b pb-3">
+          <h2 class="text-lg font-bold text-gray-800">Seu Pedido</h2>
+          <button onclick="toggleCarrinho()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+        </div>
+        
+        <div id="cart-items" class="divide-y my-4 max-h-60 overflow-y-auto">
+          <!-- Itens do carrinho -->
+        </div>
+
+        <div class="space-y-3 pt-2 border-t">
+          <div class="flex justify-between font-bold text-lg text-gray-800">
+            <span>Total:</span>
+            <span id="cart-total">R\$ 0,00</span>
+          </div>
+
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Nome ou Número da Mesa *</label>
+            <input type="text" id="cliente-mesa" placeholder="Ex: Mesa 05 ou João" class="w-full border rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5">
+        <button onclick="enviarPedido()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg flex justify-center items-center gap-2">
+          <i class="fas fa-paper-plane"></i> Enviar Pedido
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts Firebase & Lógica -->
+  <!-- Scripts Firebase & Lógica -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDs3TCNqeMqy4RXvt32YGS1gmNNA4lqZ6E",
+      authDomain: "lanchonete-sdc.firebaseapp.com",
+      projectId: "lanchonete-sdc",
+      storageBucket: "lanchonete-sdc.firebasestorage.app",
+      messagingSenderId: "888937516066",
+      appId: "1:888937516066:web:45ecb2cdfcf55af600ce7b",
+      measurementId: "G-V33T4R6WYV"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Produtos de exemplo
+    const produtos = [
+      { id: 1, categoria: "Salgados", nome: "Coxinha de Frango c/ Catupiry", preco: 7.50, desc: "Crocante por fora, cremosa por dentro.", foto: "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=200" },
+      { id: 2, categoria: "Hambúrgueres", nome: "X-Salada Especial", preco: 22.00, desc: "Hambúrguer 150g, queijo, alface, tomate e maionese da casa.", foto: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200" },
+      { id: 3, categoria: "Pizzas", nome: "Pizza Calabresa (Broto)", preco: 28.00, desc: "Calabresa fatiada, cebola, azeitonas e mussarela.", foto: "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=200" },
+      { id: 4, categoria: "Açaí", nome: "Açaí Copo 500ml", preco: 18.00, desc: "Acompanha banana, granola e leite em pó.", foto: "https://images.unsplash.com/photo-1590301157890-4810ed352733?w=200" },
+      { id: 5, categoria: "Sucos", nome: "Suco Natural de Laranja 400ml", preco: 8.00, desc: "Feito na hora, 100% fruta.", foto: "https://images.unsplash.com/photo-1613478223719-2ab802602423?w=200" }
+    ];
+
+    let carrinho = [];
+    let categoriaAtiva = "Todas";
+
+    function carregarCategorias() {
+      const categorias = ["Todas", ...new Set(produtos.map(p => p.categoria))];
+      const categoryBar = document.getElementById("category-bar");
+      categoryBar.innerHTML = categorias.map(cat => `
+        <button onclick="filtrarCategoria('${cat}')" class="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap border ${categoriaAtiva === cat ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-700 border-gray-300'} shadow-sm">
+          ${cat}
+        </button>
+      `).join('');
+    }
+
+    function renderizarProdutos() {
+      const list = document.getElementById("products-list");
+      const filtrados = categoriaAtiva === "Todas" ? produtos : produtos.filter(p => p.categoria === categoriaAtiva);
+
+      list.innerHTML = filtrados.map(p => `
+        <div class="bg-white rounded-xl p-3 shadow-sm flex gap-3 items-center border">
+          <img src="${p.foto}" alt="${p.nome}" class="w-20 h-20 object-cover rounded-lg flex-shrink-0" />
+          <div class="flex-1">
+            <h3 class="font-bold text-gray-800 text-sm">${p.nome}</h3>
+            <p class="text-xs text-gray-500 line-clamp-2 mt-0.5">${p.desc}</p>
+            <div class="flex justify-between items-center mt-2">
+              <span class="font-extrabold text-red-600 text-sm">R$ ${p.preco.toFixed(2).replace('.', ',')}</span>
+              <button onclick="adicionarAoCarrinho(${p.id})" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">
+                + Adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    window.filtrarCategoria = (cat) => {
+      categoriaAtiva = cat;
+      carregarCategorias();
+      renderizarProdutos();
+    };
+
+    window.adicionarAoCarrinho = (id) => {
+      const item = produtos.find(p => p.id === id);
+      const existe = carrinho.find(c => c.id === id);
+      if (existe) {
+        existe.qtd += 1;
+      } else {
+        carrinho.push({ ...item, qtd: 1 });
+      }
+      atualizarCarrinho();
+    };
+
+    window.alterarQtd = (id, delta) => {
+      const item = carrinho.find(c => c.id === id);
+      if (item) {
+        item.qtd += delta;
+        if (item.qtd <= 0) {
+          carrinho = carrinho.filter(c => c.id !== id);
+        }
+      }
+      atualizarCarrinho();
+    };
+
+    function atualizarCarrinho() {
+      const count = carrinho.reduce((acc, curr) => acc + curr.qtd, 0);
+      const total = carrinho.reduce((acc, curr) => acc + (curr.preco * curr.qtd), 0);
+      
+      document.getElementById("cart-count").innerText = count;
+      document.getElementById("cart-total").innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+
+      const cartItems = document.getElementById("cart-items");
+      if (carrinho.length === 0) {
+        cartItems.innerHTML = `<p class="text-center text-gray-400 py-6 text-sm">Seu carrinho está vazio.</p>`;
+      } else {
+        cartItems.innerHTML = carrinho.map(item => `
+          <div class="flex justify-between items-center py-3">
+            <div>
+              <p class="font-bold text-sm text-gray-800">${item.nome}</p>
+              <p class="text-xs text-gray-500">R$ ${item.preco.toFixed(2).replace('.', ',')} un</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="alterarQtd(${item.id}, -1)" class="w-7 h-7 bg-gray-200 text-gray-700 font-bold rounded-lg flex items-center justify-center">-</button>
+              <span class="text-sm font-bold w-4 text-center">${item.qtd}</span>
+              <button onclick="alterarQtd(${item.id}, 1)" class="w-7 h-7 bg-red-600 text-white font-bold rounded-lg flex items-center justify-center">+</button>
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    window.toggleCarrinho = () => {
+      const modal = document.getElementById("cart-modal");
+      modal.classList.toggle("hidden");
+      modal.classList.toggle("flex");
+    };
+
+    window.enviarPedido = async () => {
+      const mesa = document.getElementById("cliente-mesa").value.trim();
+      if (!mesa) {
+        alert("Por favor, digite o seu nome ou o número da mesa!");
+        return;
+      }
+      if (carrinho.length === 0) {
+        alert("Seu carrinho está vazio!");
+        return;
+      }
+
+      const total = carrinho.reduce((acc, curr) => acc + (curr.preco * curr.qtd), 0);
+
+      try {
+        await addDoc(collection(db, "pedidos"), {
+          clienteMesa: mesa,
+          itens: carrinho,
+          total: total,
+          status: "Pendente",
+          criadoEm: serverTimestamp()
+        });
+
+        alert("🚀 Pedido enviado para a cozinha com sucesso!");
+        carrinho = [];
+        document.getElementById("cliente-mesa").value = "";
+        atualizarCarrinho();
+        toggleCarrinho();
+      } catch (e) {
+        console.error("Erro ao enviar pedido: ", e);
+        alert("Ocorreu um erro ao enviar seu pedido. Tente novamente.");
+      }
+    };
+
+    carregarCategorias();
+    renderizarProdutos();
+  </script>

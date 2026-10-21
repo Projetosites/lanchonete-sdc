@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel da Cozinha - Lanchonete SDC</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body class="bg-gray-900 min-h-screen text-gray-100 font-sans p-4 sm:p-6">
+
+  <!-- Header da Cozinha -->
+  <header class="flex justify-between items-center pb-6 border-b border-gray-800 mb-6">
+    <div class="flex items-center gap-3">
+      <span class="bg-red-600 text-white p-2.5 rounded-xl text-xl"><i class="fas fa-fire"></i></span>
+      <div>
+        <h1 class="text-2xl font-bold tracking-wide">Painel de Pedidos - Cozinha</h1>
+        <p class="text-xs text-gray-400">Atualizações em tempo real</p>
+      </div>
+    </div>
+    <div class="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 text-sm">
+      Pedidos Pendentes: <span id="qtd-pendentes" class="font-bold text-red-400">0</span>
+    </div>
+  </header>
+
+  <!-- Container de Pedidos -->
+  <div id="pedidos-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <!-- Cards dos pedidos serão inseridos aqui -->
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDs3TCNqeMqy4RXvt32YGS1gmNNA4lqZ6E",
+      authDomain: "lanchonete-sdc.firebaseapp.com",
+      projectId: "lanchonete-sdc",
+      storageBucket: "lanchonete-sdc.firebasestorage.app",
+      messagingSenderId: "888937516066",
+      appId: "1:888937516066:web:45ecb2cdfcf55af600ce7b",
+      measurementId: "G-V33T4R6WYV"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const pedidosContainer = document.getElementById("pedidos-container");
+    const qtdPendentes = document.getElementById("qtd-pendentes");
+
+    const q = query(collection(db, "pedidos"), orderBy("criadoEm", "asc"));
+
+    onSnapshot(q, (snapshot) => {
+      pedidosContainer.innerHTML = "";
+      let pendentesCount = 0;
+
+      if (snapshot.empty) {
+        pedidosContainer.innerHTML = `
+          <div class="col-span-full text-center py-16 text-gray-500">
+            <i class="fas fa-check-circle text-4xl mb-3 block"></i>
+            Nenhum pedido pendente no momento.
+          </div>
+        `;
+        qtdPendentes.innerText = "0";
+        return;
+      }
+
+      snapshot.forEach((docSnap) => {
+        const p = docSnap.data();
+        const id = docSnap.id;
+
+        if (p.status === "Concluído") return;
+
+        pendentesCount++;
+
+        const hora = p.criadoEm ? new Date(p.criadoEm.toDate()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Agora';
+
+        const card = document.createElement("div");
+        card.className = "bg-gray-800 border border-gray-700 rounded-xl p-4 shadow-lg flex flex-col justify-between";
+
+        card.innerHTML = `
+          <div>
+            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-3">
+              <div>
+                <span class="text-xs bg-red-900/50 text-red-300 border border-red-700/50 px-2 py-0.5 rounded font-mono">${hora}</span>
+                <h2 class="text-lg font-bold text-white mt-1">${p.clienteMesa}</h2>
+              </div>
+              <span class="text-xs px-2 py-1 bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 rounded-full font-semibold">Pendente</span>
+            </div>
+
+            <div class="space-y-2 mb-4">
+              ${p.itens.map(item => `
+                <div class="flex justify-between items-center text-sm border-b border-gray-700/50 pb-1">
+                  <span class="font-medium text-gray-200"><strong class="text-red-400 font-bold">${item.qtd}x </strong>${item.nome}</span>
+                  <span class="text-xs text-gray-400">R$ ${(item.preco * item.qtd).toFixed(2).replace('.', ',')}</span>
+                    </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div>
+            <div class="flex justify-between text-sm font-bold border-t border-gray-700 pt-3 mb-3 text-gray-300">
+              <span>Total:</span>
+              <span class="text-green-400">R$ ${p.total.toFixed(2).replace('.', ',')}</span>
+            </div>
+            <button onclick="concluirPedido('${id}')" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded-lg text-sm transition-all flex items-center justify-center gap-2">
+              <i class="fas fa-check"></i> Marcar como Pronto
+            </button>
+          </div>
+        `;
+
+        pedidosContainer.appendChild(card);
+      });
+
+      qtdPendentes.innerText = pendentesCount;
+    });
+
+    window.concluirPedido = async (id) => {
+      try {
+        await updateDoc(doc(db, "pedidos", id), {
+          status: "Concluído"
+        });
+      } catch (e) {
+        console.error("Erro ao atualizar pedido: ", e);
+      }
+    };
+  </script>
+</body>
+</html>
